@@ -1,3 +1,10 @@
+<!-- Absolute URLs: npmjs.com renders this file and resolves relative paths against its
+     own host. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/404sl/pitwall/master/ui/brand/logo/pitwall-lockup-dark.svg">
+  <img alt="Pitwall" src="https://raw.githubusercontent.com/404sl/pitwall/master/ui/brand/logo/pitwall-lockup-light.svg" width="240">
+</picture>
+
 # @404sl/pitwall-schema
 
 The Pitwall snapshot contract: the versioned shape of the document an agent
