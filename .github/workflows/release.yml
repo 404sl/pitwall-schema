@@ -12,6 +12,16 @@ name: Release
 # filename. Renaming this file silently breaks publishing, and the failure looks
 # like an authentication error rather than a missing config.
 
+# VERIFYING THE TRUST WITHOUT PUBLISHING ANYTHING. Run this workflow by hand
+# (workflow_dispatch) with no tag. It reaches npm publish, and the version in
+# package.json is already on the registry, so it fails with:
+#
+#     npm error You cannot publish over the previously published versions: X.Y.Z
+#
+# THAT FAILURE IS THE PASS. Getting as far as the version check means OIDC minted
+# a credential and the registry accepted it. A trust that is not configured fails
+# earlier and differently - E401, or a demand for a one-time password - and never
+# reaches the version at all. So read the error, not the red tick.
 on:
   push:
     tags: ["v*"]
