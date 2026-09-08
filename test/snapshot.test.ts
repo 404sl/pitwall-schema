@@ -8,6 +8,8 @@ import {
   inbox,
   Classification,
   INBOX_CLASSIFICATIONS,
+  Origin,
+  resolveOrigin,
 } from "../src/index.ts";
 
 const minimal = {
@@ -103,4 +105,68 @@ test("the schema accepts a repo of every kind", () => {
 test("Snapshot is exported as a usable zod schema", () => {
   assert.equal(typeof Snapshot.safeParse, "function");
   assert.equal(Snapshot.safeParse({}).success, false);
+});
+
+test("an issue may carry the session that asked for it", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [{
+        id: "a-1", title: "t", status: "open", classification: "ready",
+        origin: { session: "planning", ref: "c1796a" },
+      }],
+    }],
+  });
+  assert.deepEqual(snap.projects[0]!.issues[0]!.origin, { session: "planning", ref: "c1796a" });
+});
+
+test("origin is optional - most issues predate the convention", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [{ id: "a-1", title: "t", status: "open", classification: "ready" }],
+    }],
+  });
+  assert.equal(snap.projects[0]!.issues[0]!.origin, undefined);
+});
+
+test("an origin missing its ref is rejected - the ref is the address", () => {
+  assert.throws(() => Origin.parse({ session: "planning" }));
+  assert.throws(() => Origin.parse({ ref: "c1796a" }));
+});
+
+test("resolveOrigin walks up the id when a child did not inherit one", () => {
+  const parent = { id: "p-1", origin: { session: "planning", ref: "c1796a" } };
+  const child = { id: "p-1.2", origin: undefined };
+  const grandchild = { id: "p-1.2.3", origin: undefined };
+  const byId = new Map([parent, child, grandchild].map((i) => [i.id, i]));
+
+  assert.deepEqual(resolveOrigin(child, byId), parent.origin);
+  assert.deepEqual(resolveOrigin(grandchild, byId), parent.origin);
+});
+
+test("resolveOrigin prefers the issue's own origin over an ancestor's", () => {
+  const own = { session: "other", ref: "zzz" };
+  const parent = { id: "p-1", origin: { session: "planning", ref: "c1796a" } };
+  const child = { id: "p-1.2", origin: own };
+  const byId = new Map([parent, child].map((i) => [i.id, i]));
+
+  assert.deepEqual(resolveOrigin(child, byId), own);
+});
+
+test("resolveOrigin returns undefined when no ancestor has one", () => {
+  const child = { id: "p-1.2", origin: undefined };
+  const byId = new Map([["p-1", { id: "p-1", origin: undefined }], [child.id, child]]);
+  assert.equal(resolveOrigin(child, byId), undefined);
+  assert.equal(resolveOrigin({ id: "top", origin: undefined }, byId), undefined);
+});
+
+test("the contract version reflects an additive change", () => {
+  const [major, minor] = SCHEMA_VERSION.split(".");
+  assert.equal(major, "1", "origin is additive - it must not force a major bump");
+  assert.equal(minor, "1");
 });

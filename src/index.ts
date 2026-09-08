@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.0.0";
+export const SCHEMA_VERSION = "1.1.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -142,6 +142,24 @@ export const Staleness = z.object({
 });
 export type Staleness = z.infer<typeof Staleness>;
 
+/**
+ * Who asked for an issue.
+ *
+ * Work is filed from several named sessions at once, one per part of a product,
+ * and the session that asked is the one that wants to hear when it lands. No
+ * tracker records that, so it is carried here.
+ *
+ * `ref` is the address and `session` is only a label. Session names are neither
+ * unique nor stable - two sessions sharing a name have been live simultaneously,
+ * and one was renamed within two minutes of starting - so anything delivering a
+ * notice addresses the ref and prints the name.
+ */
+export const Origin = z.object({
+  session: z.string(),
+  ref: z.string(),
+});
+export type Origin = z.infer<typeof Origin>;
+
 export const Issue = z.object({
   id: z.string(),
   title: z.string(),
@@ -154,6 +172,7 @@ export const Issue = z.object({
   blockedBy: z.array(z.string()).default([]),
   classification: Classification,
   staleness: Staleness.default({ verdict: "unchecked", evidence: [] }),
+  origin: Origin.optional(),
 });
 export type Issue = z.infer<typeof Issue>;
 
@@ -231,4 +250,29 @@ export function inbox(snapshot: Snapshot): Array<{ project: Project; issue: Issu
       .filter((issue) => isYours(issue.classification))
       .map((issue) => ({ project, issue })),
   );
+}
+
+/**
+ * The origin of an issue, falling back to the nearest ancestor that has one.
+ *
+ * A tracker that splits an issue into children carries the labels down and not
+ * the metadata, so the child - which is the thing that actually ships - loses the
+ * record of who asked. The id is what still encodes the relationship: a child of
+ * `pitwall-4b5` is `pitwall-4b5.1`, so the ancestors are the id's dotted prefixes.
+ *
+ * Defined here rather than in a collector so that every console resolves it the
+ * same way, for the same reason `isYours` lives here.
+ */
+export function resolveOrigin(
+  issue: Pick<Issue, "id" | "origin">,
+  byId: ReadonlyMap<string, Pick<Issue, "id" | "origin">>,
+): Origin | undefined {
+  if (issue.origin) return issue.origin;
+  let id = issue.id;
+  while (id.includes(".")) {
+    id = id.slice(0, id.lastIndexOf("."));
+    const ancestor = byId.get(id);
+    if (ancestor?.origin) return ancestor.origin;
+  }
+  return undefined;
 }
