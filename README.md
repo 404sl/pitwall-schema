@@ -1,9 +1,6 @@
-<!-- Absolute URLs: npmjs.com renders this file and resolves relative paths against its
-     own host. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/404sl/pitwall/master/ui/brand/logo/pitwall-lockup-dark.svg">
-  <img alt="Pitwall" src="https://raw.githubusercontent.com/404sl/pitwall/master/ui/brand/logo/pitwall-lockup-light.svg" width="240">
-</picture>
+<!-- The mark, not the lockup: the lockup sets live text in Barlow Condensed, and npm and
+     GitHub both fall back to a wider face that overflows the viewBox and clips the word. -->
+<img alt="Pitwall" width="80" src="https://raw.githubusercontent.com/404sl/pitwall/master/ui/brand/logo/pitwall-mark.svg">
 
 # @404sl/pitwall-schema
 
