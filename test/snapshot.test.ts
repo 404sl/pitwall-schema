@@ -75,6 +75,21 @@ test("staleness defaults to unchecked, which is not a claim that it still blocks
   assert.equal(snap.projects[0]!.issues[0]!.staleness.verdict, "unchecked");
 });
 
+test("an uncomputed landedToday stays undefined rather than standing in as zero", () => {
+  const metrics = (m: unknown) => parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: m,
+    }],
+  }).projects[0]!.metrics;
+
+  assert.equal(metrics({}).landedToday, undefined);
+  assert.equal(metrics({}).closedToday, 0);
+  assert.equal(metrics({ landedToday: 0 }).landedToday, 0);
+  assert.equal(metrics({ landedToday: 3 }).landedToday, 3);
+});
+
 test("a project records the sources it could not read", () => {
   const snap = parseSnapshot({
     ...minimal,

@@ -188,7 +188,16 @@ export const PullRequest = z.object({
 export type PullRequest = z.infer<typeof PullRequest>;
 
 export const Metrics = z.object({
-  landedToday: z.number().int().nonnegative().default(0),
+  /**
+   * How many issues MERGED today - the same closure event `closedToday` counts,
+   * an issue closed today whose closure names a merge. Not deployed: a merge
+   * that never reaches an environment still landed.
+   *
+   * Absent means nobody computed it. Zero means nothing merged. These are
+   * different answers and a console must be able to tell them apart, which is
+   * why this field carries no default.
+   */
+  landedToday: z.number().int().nonnegative().optional(),
   closedToday: z.number().int().nonnegative().default(0),
   readyCount: z.number().int().nonnegative().default(0),
   inboxCount: z.number().int().nonnegative().default(0),
