@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.1.0";
+export const SCHEMA_VERSION = "1.2.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -235,6 +235,20 @@ export const Snapshot = z.object({
     executor: Executor.default("local"),
   }),
   projects: z.array(Project).default([]),
+  /**
+   * Failures that belong to the RUN rather than to any one project.
+   *
+   * A project's own `errors[]` cannot express this. If the configuration listing
+   * which roots to read is itself unreadable - absent, malformed, naming a path
+   * that is not a workspace - then there are no projects to hang an error off,
+   * and every project that does get assembled carries `errors: []` and reads as
+   * perfectly healthy. The run silently describes a different set of workspaces
+   * from the one that was asked for.
+   *
+   * Same principle as the per-project field, one level up: a consumer has to be
+   * able to tell "nothing to do" from "we could not work out where to look".
+   */
+  errors: z.array(CollectionError).default([]),
 });
 export type Snapshot = z.infer<typeof Snapshot>;
 

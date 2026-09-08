@@ -165,8 +165,36 @@ test("resolveOrigin returns undefined when no ancestor has one", () => {
   assert.equal(resolveOrigin({ id: "top", origin: undefined }, byId), undefined);
 });
 
-test("the contract version reflects an additive change", () => {
-  const [major, minor] = SCHEMA_VERSION.split(".");
-  assert.equal(major, "1", "origin is additive - it must not force a major bump");
-  assert.equal(minor, "1");
+test("additive changes do not force a major bump", () => {
+  // Pins the MAJOR only. An earlier version of this test also pinned the minor,
+  // which made it fail on the next additive field - the exact change it exists to
+  // permit. A test that has to be edited by every change it is meant to allow is
+  // not protecting anything.
+  const [major] = SCHEMA_VERSION.split(".");
+  assert.equal(major, "1");
+  assert.match(SCHEMA_VERSION, /^\d+\.\d+\.\d+$/);
+});
+
+test("a snapshot records a failure that belongs to the run, not to a project", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    errors: [{ source: "config", message: "roots is not an array of strings",
+               at: new Date().toISOString() }],
+  });
+  assert.equal(snap.errors.length, 1);
+  assert.equal(snap.errors[0]!.source, "config");
+});
+
+test("run-level errors default to empty and are never undefined", () => {
+  assert.deepEqual(parseSnapshot(minimal).errors, []);
+});
+
+test("a broken config is distinguishable from a run that found nothing", () => {
+  const foundNothing = parseSnapshot(minimal);
+  const couldNotLook = parseSnapshot({
+    ...minimal,
+    errors: [{ source: "config", message: "unreadable", at: new Date().toISOString() }],
+  });
+  assert.deepEqual(foundNothing.projects, couldNotLook.projects);
+  assert.notDeepEqual(foundNothing.errors, couldNotLook.errors);
 });
