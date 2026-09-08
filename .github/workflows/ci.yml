@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install
+      - run: npm run lint
+      - run: npm test
+      # The JSON Schema artifact is generated, not committed. Building it here is
+      # what proves the emitter still runs - a consumer that is not TypeScript has
+      # nothing else to validate against.
+      - run: npm run build
