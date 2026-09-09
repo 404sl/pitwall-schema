@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.3.0";
+export const SCHEMA_VERSION = "1.4.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -231,6 +231,12 @@ export const Project = z.object({
   id: z.string(),
   name: z.string(),
   root: z.string(),
+  workspaceFile: z
+    .string()
+    .optional()
+    .describe(
+      "The name of the workspace file this project was read from, such as `.pitwall.json` or the `.autofix.json` it replaces. A name rather than a boolean, because a boolean stops answering the moment a third name exists. Absent means the producer did not report one - either it read no file at all, or it predates this field - so absence is not evidence that a file was read under any particular name.",
+    ),
   authority: Authority,
   signals: z.array(Signal).default([]),
   repos: z.array(Repo).default([]),
