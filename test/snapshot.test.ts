@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import {
   SCHEMA_VERSION,
   Snapshot,
@@ -9,6 +10,7 @@ import {
   Classification,
   INBOX_CLASSIFICATIONS,
   Origin,
+  Project,
   PullRequest,
   resolveOrigin,
 } from "../src/index.ts";
@@ -244,4 +246,41 @@ test("a draft pull request is distinguishable from a ready one", () => {
 test("draft is a boolean, not whatever a collector happened to put there", () => {
   assert.throws(() => PullRequest.parse({ repo: "r", number: 7, checks: "green", draft: "yes" }));
   assert.equal(PullRequest.parse({ repo: "r", number: 7, checks: "green" }).draft, false);
+});
+
+test("a project reports which workspace file it was read from", () => {
+  const project = (workspaceFile: unknown) => parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a", workspaceFile,
+      authority: { kind: "beads" }, metrics: {},
+    }],
+  }).projects[0]!;
+
+  assert.equal(project(".pitwall.json").workspaceFile, ".pitwall.json");
+  assert.equal(project(".autofix.json").workspaceFile, ".autofix.json");
+  assert.notEqual(project(".pitwall.json").workspaceFile, project(".autofix.json").workspaceFile);
+});
+
+test("a project that names no workspace file still parses and claims none", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+    }],
+  });
+  assert.equal(snap.projects[0]!.workspaceFile, undefined);
+});
+
+test("workspaceFile is a name, not a boolean saying whether a file was found", () => {
+  const project = { id: "a", name: "a", root: "/tmp/a", authority: { kind: "beads" }, metrics: {} };
+  assert.throws(() => Project.parse({ ...project, workspaceFile: true }));
+});
+
+test("the emitted JSON Schema carries workspaceFile, and does not require it", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const project = schema["properties"].projects.items;
+  assert.equal(project.properties.workspaceFile.type, "string");
+  assert.equal(project.required.includes("workspaceFile"), false);
 });
