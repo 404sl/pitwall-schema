@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.2.0";
+export const SCHEMA_VERSION = "1.3.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -182,6 +182,12 @@ export const PullRequest = z.object({
   title: z.string().optional(),
   issueId: z.string().optional(),
   checks: z.enum(["green", "red", "pending", "none"]),
+  draft: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Whether the pull request is still a draft, mirroring the isDraft field of `gh pr list`, which reports drafts alongside ready pull requests. False means ready for review, and is what a producer that does not report drafts is taken to mean.",
+    ),
   labels: z.array(z.string()).default([]),
   url: z.string().optional(),
 });

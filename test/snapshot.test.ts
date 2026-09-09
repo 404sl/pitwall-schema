@@ -9,6 +9,7 @@ import {
   Classification,
   INBOX_CLASSIFICATIONS,
   Origin,
+  PullRequest,
   resolveOrigin,
 } from "../src/index.ts";
 
@@ -212,4 +213,35 @@ test("a broken config is distinguishable from a run that found nothing", () => {
   });
   assert.deepEqual(foundNothing.projects, couldNotLook.projects);
   assert.notDeepEqual(foundNothing.errors, couldNotLook.errors);
+});
+
+test("a pull request that does not report drafts is read as ready, not as unknown", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      pipeline: [{ repo: "r", number: 7, checks: "green" }],
+    }],
+  });
+  assert.equal(snap.projects[0]!.pipeline[0]!.draft, false);
+});
+
+test("a draft pull request is distinguishable from a ready one", () => {
+  const pipeline = (draft: unknown) => parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      pipeline: [{ repo: "r", number: 7, checks: "green", draft }],
+    }],
+  }).projects[0]!.pipeline[0]!;
+
+  assert.equal(pipeline(true).draft, true);
+  assert.equal(pipeline(false).draft, false);
+});
+
+test("draft is a boolean, not whatever a collector happened to put there", () => {
+  assert.throws(() => PullRequest.parse({ repo: "r", number: 7, checks: "green", draft: "yes" }));
+  assert.equal(PullRequest.parse({ repo: "r", number: 7, checks: "green" }).draft, false);
 });
