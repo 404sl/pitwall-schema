@@ -12,6 +12,8 @@ import {
   Origin,
   Project,
   PullRequest,
+  Candidate,
+  Signal,
   resolveOrigin,
 } from "../src/index.ts";
 
@@ -283,4 +285,88 @@ test("the emitted JSON Schema carries workspaceFile, and does not require it", (
   const project = schema["properties"].projects.items;
   assert.equal(project.properties.workspaceFile.type, "string");
   assert.equal(project.required.includes("workspaceFile"), false);
+});
+
+test("github is a signal kind, so the first real signal source can name itself", () => {
+  for (const kind of ["sentry", "session-replay", "ci", "uptime", "github", "custom"] as const) {
+    assert.equal(Signal.parse({ kind, name: "s" }).kind, kind);
+  }
+});
+
+test("a project carries the candidates its signals found, and parsing keeps them", () => {
+  const createdAt = new Date().toISOString();
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      signals: [{ kind: "github", name: "404sl/pitwall issues" }],
+      candidates: [{
+        source: "404sl/pitwall issues",
+        ref: "404sl/pitwall#7",
+        title: "snapshot omits lane 3",
+        repo: "404sl/pitwall",
+        url: "https://github.com/404sl/pitwall/issues/7",
+        author: "elik-ru",
+        createdAt,
+      }],
+    }],
+  });
+
+  assert.deepEqual(snap.projects[0]!.candidates, [{
+    source: "404sl/pitwall issues",
+    ref: "404sl/pitwall#7",
+    title: "snapshot omits lane 3",
+    repo: "404sl/pitwall",
+    url: "https://github.com/404sl/pitwall/issues/7",
+    author: "elik-ru",
+    createdAt,
+  }]);
+});
+
+test("a project whose signals found nothing carries an empty candidate list", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+    }],
+  });
+  assert.deepEqual(snap.projects[0]!.candidates, []);
+});
+
+test("a candidate must say what produced it, where it lives and what it is", () => {
+  const candidate = { source: "s", ref: "r", title: "t" };
+  assert.deepEqual(Candidate.parse(candidate), candidate);
+  assert.throws(() => Candidate.parse({ ref: "r", title: "t" }));
+  assert.throws(() => Candidate.parse({ source: "s", title: "t" }));
+  assert.throws(() => Candidate.parse({ source: "s", ref: "r" }));
+});
+
+test("an unreported candidate author stays absent rather than standing in as a value", () => {
+  const parsed = Candidate.parse({ source: "s", ref: "r", title: "t" });
+  assert.equal(parsed.author, undefined);
+  assert.equal(Object.hasOwn(parsed, "author"), false);
+});
+
+test("a candidate cannot carry a classification - it is evidence, not work", () => {
+  const parsed = Candidate.parse({
+    source: "s", ref: "r", title: "t", classification: "ready", status: "open",
+  }) as Record<string, unknown>;
+  assert.equal(parsed["classification"], undefined);
+  assert.equal(parsed["status"], undefined);
+});
+
+test("the emitted JSON Schema carries candidates and the github signal kind", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const project = schema["properties"].projects.items;
+
+  assert.equal(project.properties.candidates.type, "array");
+  assert.equal(project.required.includes("candidates"), true);
+
+  const candidate = project.properties.candidates.items;
+  assert.deepEqual(candidate.required, ["source", "ref", "title"]);
+  assert.equal(candidate.properties.author.type, "string");
+
+  assert.equal(project.properties.signals.items.properties.kind.enum.includes("github"), true);
 });

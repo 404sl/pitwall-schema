@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.4.0";
+export const SCHEMA_VERSION = "1.5.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -53,7 +53,7 @@ export type Authority = z.infer<typeof Authority>;
  * authority. That asymmetry is deliberate and is what keeps one master.
  */
 export const Signal = z.object({
-  kind: z.enum(["sentry", "session-replay", "ci", "uptime", "custom"]),
+  kind: z.enum(["sentry", "session-replay", "ci", "uptime", "github", "custom"]),
   name: z.string(),
   location: z.string().optional(),
 });
@@ -227,6 +227,34 @@ export const CollectionError = z.object({
 });
 export type CollectionError = z.infer<typeof CollectionError>;
 
+export const Candidate = z
+  .object({
+    source: z
+      .string()
+      .describe(
+        "The `name` of the Signal that produced this candidate. Candidates are flat on the project rather than nested inside the signal that found them, so this is what associates the two.",
+      ),
+    ref: z
+      .string()
+      .describe(
+        "Stable external address of the thing itself, unique among the candidates of one source. It is the value an authority's external reference carries once a candidate has been promoted, so it is also what a consumer matches on to stop showing something that is already work.",
+      ),
+    title: z.string(),
+    repo: z.string().optional(),
+    url: z.string().optional(),
+    author: z
+      .string()
+      .optional()
+      .describe(
+        "Who wrote it, as the source identifies them - a login, not a display name. This records authorship and decides nothing: whether an author is trusted is the consumer's own allowlist to apply, and a display name here silently matches no allowlist. Absent means the producer did not report one, never that the author is untrusted.",
+      ),
+    createdAt: Iso.optional(),
+  })
+  .describe(
+    "One piece of evidence a signal found, which is NOT work. A candidate becomes work only when a person promotes it into the authority, so it is deliberately not shaped like an Issue and carries no classification: anything that renders it as work breaks the one-master rule that Signal exists to keep.",
+  );
+export type Candidate = z.infer<typeof Candidate>;
+
 export const Project = z.object({
   id: z.string(),
   name: z.string(),
@@ -239,6 +267,12 @@ export const Project = z.object({
     ),
   authority: Authority,
   signals: z.array(Signal).default([]),
+  candidates: z
+    .array(Candidate)
+    .default([])
+    .describe(
+      "Everything the project's signals found and nobody has promoted. One flat list whatever produced each row, matching every other collection here, with `source` naming the signal. Empty means the signals found nothing, not that they could not be read - a source that failed records itself in `errors`.",
+    ),
   repos: z.array(Repo).default([]),
   lanes: z.array(Lane).default([]),
   issues: z.array(Issue).default([]),
