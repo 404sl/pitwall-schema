@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.5.0";
+export const SCHEMA_VERSION = "1.6.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -99,6 +99,7 @@ export type Lane = z.infer<typeof Lane>;
 export const Classification = z.enum([
   "yours:decision",
   "yours:access",
+  "parked:call",
   "parked:tooling",
   "parked:watch",
   "parked:umbrella",

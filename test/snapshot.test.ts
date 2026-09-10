@@ -40,7 +40,7 @@ test("only the yours: classifications count as somebody's queue", () => {
 });
 
 test("parked and in-flight work is never in the inbox", () => {
-  for (const c of ["parked:tooling", "parked:watch", "parked:umbrella",
+  for (const c of ["parked:call", "parked:tooling", "parked:watch", "parked:umbrella",
                    "parked:roadmap", "blocked", "ready", "in-flight", "landing"] as const) {
     assert.equal(isYours(c), false, `${c} must not be treated as somebody's queue`);
   }
@@ -369,4 +369,32 @@ test("the emitted JSON Schema carries candidates and the github signal kind", ()
   assert.equal(candidate.properties.author.type, "string");
 
   assert.equal(project.properties.signals.items.properties.kind.enum.includes("github"), true);
+});
+
+test("parked:call is a classification, and a decision that is not the owner's stays out of the inbox", () => {
+  assert.equal(Classification.parse("parked:call"), "parked:call");
+  assert.equal(isYours("parked:call"), false);
+  assert.deepEqual([...INBOX_CLASSIFICATIONS], ["yours:decision", "yours:access"]);
+
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [
+        { id: "a-1", title: "which of three shapes", status: "open", classification: "parked:call" },
+        { id: "a-2", title: "what the product is called", status: "open", classification: "yours:decision" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(inbox(snap).map((e) => e.issue.id), ["a-2"]);
+});
+
+test("the emitted JSON Schema carries parked:call", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const issue = schema["properties"].projects.items.properties.issues.items;
+
+  assert.equal(issue.properties.classification.enum.includes("parked:call"), true);
+  assert.equal(issue.properties.classification.enum.includes("yours:decision"), true);
 });
