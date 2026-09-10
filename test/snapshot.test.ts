@@ -398,3 +398,66 @@ test("the emitted JSON Schema carries parked:call", () => {
   assert.equal(issue.properties.classification.enum.includes("parked:call"), true);
   assert.equal(issue.properties.classification.enum.includes("yours:decision"), true);
 });
+
+test("a snapshot carries a different read time per project, so one can be older than the run", () => {
+  const generatedAt = "2026-09-10T12:00:00.000Z";
+  const keptAt = "2026-09-08T09:30:00.000Z";
+  const snap = parseSnapshot({
+    ...minimal,
+    generatedAt,
+    projects: [
+      {
+        id: "fresh", name: "fresh", root: "/tmp/fresh",
+        authority: { kind: "beads" }, metrics: {},
+        issuesReadAt: generatedAt,
+        issues: [{ id: "fresh-1", title: "t", status: "open", classification: "ready" }],
+      },
+      {
+        id: "kept", name: "kept", root: "/tmp/kept",
+        authority: { kind: "beads" }, metrics: {},
+        issuesReadAt: keptAt,
+        issues: [{ id: "kept-1", title: "t", status: "open", classification: "blocked" }],
+        errors: [{ source: "authority", message: "bd exited 1", at: generatedAt }],
+      },
+    ],
+  });
+
+  const [fresh, kept] = snap.projects as [Project, Project];
+  assert.equal(fresh.issuesReadAt, generatedAt);
+  assert.equal(kept.issuesReadAt, keptAt);
+  assert.notEqual(fresh.issuesReadAt, kept.issuesReadAt);
+  assert.ok(Date.parse(kept.issuesReadAt!) < Date.parse(snap.generatedAt));
+  assert.equal(Date.parse(fresh.issuesReadAt!), Date.parse(snap.generatedAt));
+});
+
+test("a project that reports no read time claims none rather than inheriting the run's", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+    }],
+  });
+  assert.equal(snap.projects[0]!.issuesReadAt, undefined);
+  assert.notEqual(snap.projects[0]!.issuesReadAt, snap.generatedAt);
+});
+
+test("issuesReadAt is a timestamp, not whatever a collector happened to put there", () => {
+  const project = { id: "a", name: "a", root: "/tmp/a", authority: { kind: "beads" }, metrics: {} };
+  assert.throws(() => Project.parse({ ...project, issuesReadAt: "yesterday" }));
+  assert.throws(() => Project.parse({ ...project, issuesReadAt: 1757505600000 }));
+  assert.equal(
+    Project.parse({ ...project, issuesReadAt: "2026-09-10T12:00:00.000Z" }).issuesReadAt,
+    "2026-09-10T12:00:00.000Z",
+  );
+});
+
+test("the emitted JSON Schema carries issuesReadAt as a date-time, and does not require it", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const project = schema["properties"].projects.items;
+
+  assert.equal(project.properties.issuesReadAt.type, "string");
+  assert.equal(project.properties.issuesReadAt.format, "date-time");
+  assert.equal(project.properties.issuesReadAt.format, schema["properties"].generatedAt.format);
+  assert.equal(project.required.includes("issuesReadAt"), false);
+});

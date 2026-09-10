@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.6.0";
+export const SCHEMA_VERSION = "1.7.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -277,6 +277,9 @@ export const Project = z.object({
   repos: z.array(Repo).default([]),
   lanes: z.array(Lane).default([]),
   issues: z.array(Issue).default([]),
+  issuesReadAt: Iso.optional().describe(
+    "When the issues this project carries were actually read from its authority. Usually the time of this collection, but a project whose authority could not be read keeps the issues an earlier collection held for it, and then this is carried from that read rather than re-dated - so it is older than the document's `generatedAt`, and the difference is how much older. Absent means the producer did not report one - either it read no issues at all, or it predates this field - so absence is not evidence that the issues are as current as the run.",
+  ),
   pipeline: z.array(PullRequest).default([]),
   metrics: Metrics,
   errors: z.array(CollectionError).default([]),
