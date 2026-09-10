@@ -41,7 +41,8 @@ test("only the yours: classifications count as somebody's queue", () => {
 
 test("parked and in-flight work is never in the inbox", () => {
   for (const c of ["parked:call", "parked:tooling", "parked:watch", "parked:umbrella",
-                   "parked:roadmap", "blocked", "ready", "in-flight", "landing"] as const) {
+                   "parked:roadmap", "blocked", "ready", "in-flight", "landing",
+                   "unknown"] as const) {
     assert.equal(isYours(c), false, `${c} must not be treated as somebody's queue`);
   }
 });
@@ -460,4 +461,45 @@ test("the emitted JSON Schema carries issuesReadAt as a date-time, and does not 
   assert.equal(project.properties.issuesReadAt.format, "date-time");
   assert.equal(project.properties.issuesReadAt.format, schema["properties"].generatedAt.format);
   assert.equal(project.required.includes("issuesReadAt"), false);
+});
+
+test("unknown is a classification, and an issue whose board could not be read stays out of the inbox", () => {
+  assert.equal(Classification.parse("unknown"), "unknown");
+  assert.equal(isYours("unknown"), false);
+  assert.deepEqual([...INBOX_CLASSIFICATIONS], ["yours:decision", "yours:access"]);
+
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      errors: [{ source: "beads", message: "bd exited 1", at: new Date().toISOString() }],
+      issues: [
+        { id: "a-1", title: "whatever the board would have said", status: "open", classification: "unknown" },
+        { id: "a-2", title: "what the product is called", status: "open", classification: "yours:decision" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(inbox(snap).map((e) => e.issue.id), ["a-2"]);
+  assert.equal(snap.projects[0]!.issues[0]!.classification, "unknown");
+});
+
+test("classification stays required, so an unreadable board cannot omit it", () => {
+  assert.throws(() => parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [{ id: "a-1", title: "t", status: "open" }],
+    }],
+  }));
+});
+
+test("the emitted JSON Schema carries unknown", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const issue = schema["properties"].projects.items.properties.issues.items;
+
+  assert.equal(issue.properties.classification.enum.includes("unknown"), true);
+  assert.equal(issue.required.includes("classification"), true);
 });
