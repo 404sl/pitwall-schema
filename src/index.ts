@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.8.0";
+export const SCHEMA_VERSION = "1.9.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -30,7 +30,12 @@ export const Repo = z.object({
   name: z.string(),
   path: z.string(),
   kind: RepoKind,
-  defaultBranch: z.string().default("main"),
+  defaultBranch: z
+    .string()
+    .optional()
+    .describe(
+      "The branch this repository's work lands on, as the producer read it. Absent means the producer did not read it - `refs/remotes/origin/HEAD` is written by `git clone`, and a checkout created with `git init` carries none - so absence is not evidence that the repository has no default branch, and no consumer may infer a name from it. A default on this field is how that inference gets manufactured, which is why it carries none.",
+    ),
   head: z.string().optional(),
   dirty: z.boolean().optional(),
 });
