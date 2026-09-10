@@ -119,8 +119,35 @@ test("the schema accepts a repo of every kind", () => {
         repos: [{ name: "r", path: "r", kind }],
       }],
     });
-    assert.equal(snap.projects[0]!.repos[0]!.defaultBranch, "main");
+    assert.equal(snap.projects[0]!.repos[0]!.kind, kind);
   }
+});
+
+test("a repo with no defaultBranch reports none rather than claiming main", () => {
+  const parse = (repo: Record<string, unknown>) =>
+    parseSnapshot({
+      ...minimal,
+      projects: [{
+        id: "a", name: "a", root: "/tmp/a",
+        authority: { kind: "beads" }, metrics: {},
+        repos: [repo],
+      }],
+    }).projects[0]!.repos[0]!;
+
+  assert.equal(parse({ name: "r", path: "r", kind: "library" }).defaultBranch, undefined);
+  assert.equal(
+    parse({ name: "r", path: "r", kind: "library", defaultBranch: "master" }).defaultBranch,
+    "master",
+  );
+});
+
+test("the emitted JSON Schema neither requires defaultBranch nor defaults it, and says what absence means", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const repo = schema["properties"].projects.items.properties.repos.items;
+
+  assert.equal(repo.required.includes("defaultBranch"), false);
+  assert.equal("default" in repo.properties.defaultBranch, false);
+  assert.match(repo.properties.defaultBranch.description, /did not read it/);
 });
 
 test("Snapshot is exported as a usable zod schema", () => {
