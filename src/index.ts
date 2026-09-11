@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.9.0";
+export const SCHEMA_VERSION = "1.10.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -180,6 +180,18 @@ export const Issue = z.object({
   classification: Classification,
   staleness: Staleness.default({ verdict: "unchecked", evidence: [] }),
   origin: Origin.optional(),
+  owner: z
+    .string()
+    .optional()
+    .describe(
+      "The session name whose queue this issue is sitting in - the one expected to work it, which a tracker usually calls the assignee. NOT whoever created it, and never a git identity: a tracker that also has a field spelled `owner` is frequently carrying the configured git user there, and mapping that one in leaves every issue owned by whoever set up the checkout. Absent means nobody is on it, which is a real state and a common one - a producer must not stand a placeholder in for it, and an empty string is not a way of saying nobody.",
+    ),
+  reporter: z
+    .string()
+    .optional()
+    .describe(
+      "The session name that asked for this issue, as the tracker records its creator. Distinct from `origin`, which is what the creator wrote down about itself and carries the `ref` that a notice is actually delivered to; this is the tracker's own record and is a label only, so nothing routes on it. Absent means the producer did not report one.",
+    ),
 });
 export type Issue = z.infer<typeof Issue>;
 
