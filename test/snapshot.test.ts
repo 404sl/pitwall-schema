@@ -9,6 +9,7 @@ import {
   inbox,
   Classification,
   INBOX_CLASSIFICATIONS,
+  Issue,
   Origin,
   Project,
   PullRequest,
@@ -529,4 +530,78 @@ test("the emitted JSON Schema carries unknown", () => {
 
   assert.equal(issue.properties.classification.enum.includes("unknown"), true);
   assert.equal(issue.required.includes("classification"), true);
+});
+
+test("an issue carries whose queue it is in and who asked for it", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [{
+        id: "a-1", title: "t", status: "open", classification: "ready",
+        owner: "pitwall-devloop", reporter: "pitwall-planning-session",
+      }],
+    }],
+  });
+
+  const issue = snap.projects[0]!.issues[0]!;
+  assert.equal(issue.owner, "pitwall-devloop");
+  assert.equal(issue.reporter, "pitwall-planning-session");
+});
+
+test("owner and reporter are separate - the session working it is not the session that asked", () => {
+  const issue = Issue.parse({
+    id: "a-1", title: "t", status: "open", classification: "ready",
+    owner: "pitwall-devloop", reporter: "pitwall-planning-session",
+  });
+  assert.notEqual(issue.owner, issue.reporter);
+});
+
+test("an unassigned issue stays absent rather than standing in as a value", () => {
+  const issue = Issue.parse({ id: "a-1", title: "t", status: "open", classification: "ready" });
+
+  assert.equal(issue.owner, undefined);
+  assert.equal(issue.reporter, undefined);
+  assert.equal(Object.hasOwn(issue, "owner"), false);
+  assert.equal(Object.hasOwn(issue, "reporter"), false);
+});
+
+test("owner and reporter are session names, not whatever a collector happened to put there", () => {
+  const base = { id: "a-1", title: "t", status: "open", classification: "ready" };
+  assert.throws(() => Issue.parse({ ...base, owner: 42 }));
+  assert.throws(() => Issue.parse({ ...base, reporter: { name: "planning" } }));
+  assert.throws(() => Issue.parse({ ...base, owner: ["a", "b"] }));
+});
+
+test("an issue carrying one of the two still parses, and claims nothing about the other", () => {
+  const base = { id: "a-1", title: "t", status: "open", classification: "ready" };
+
+  assert.equal(Issue.parse({ ...base, owner: "pitwall-devloop" }).reporter, undefined);
+  assert.equal(Issue.parse({ ...base, reporter: "pitwall-planning-session" }).owner, undefined);
+});
+
+test("owner and reporter sit beside origin rather than replacing it", () => {
+  const issue = Issue.parse({
+    id: "a-1", title: "t", status: "open", classification: "ready",
+    owner: "pitwall-devloop", reporter: "pitwall-planning-session",
+    origin: { session: "pitwall-planning-session", ref: "843c93" },
+  });
+
+  assert.deepEqual(issue.origin, { session: "pitwall-planning-session", ref: "843c93" });
+  assert.equal(issue.reporter, "pitwall-planning-session");
+});
+
+test("the emitted JSON Schema carries owner and reporter, requires neither and defaults neither", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const issue = schema["properties"].projects.items.properties.issues.items;
+
+  for (const field of ["owner", "reporter"] as const) {
+    assert.equal(issue.properties[field].type, "string");
+    assert.equal(issue.required.includes(field), false);
+    assert.equal("default" in issue.properties[field], false);
+  }
+
+  assert.match(issue.properties.owner.description, /never a git identity/);
+  assert.match(issue.properties.reporter.description, /Distinct from `origin`/);
 });
