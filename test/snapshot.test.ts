@@ -42,8 +42,8 @@ test("only the yours: classifications count as somebody's queue", () => {
 
 test("parked and in-flight work is never in the inbox", () => {
   for (const c of ["parked:call", "parked:tooling", "parked:watch", "parked:umbrella",
-                   "parked:roadmap", "blocked", "ready", "in-flight", "landing",
-                   "unknown"] as const) {
+                   "parked:roadmap", "parked:unrefined", "blocked", "ready", "in-flight",
+                   "landing", "unknown"] as const) {
     assert.equal(isYours(c), false, `${c} must not be treated as somebody's queue`);
   }
 });
@@ -604,4 +604,32 @@ test("the emitted JSON Schema carries owner and reporter, requires neither and d
 
   assert.match(issue.properties.owner.description, /never a git identity/);
   assert.match(issue.properties.reporter.description, /Distinct from `origin`/);
+});
+
+test("parked:unrefined is a classification, and a request waiting to be refined stays out of the inbox", () => {
+  assert.equal(Classification.parse("parked:unrefined"), "parked:unrefined");
+  assert.equal(isYours("parked:unrefined"), false);
+  assert.deepEqual([...INBOX_CLASSIFICATIONS], ["yours:decision", "yours:access"]);
+
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [
+        { id: "a-1", title: "make the board faster somehow", status: "open", classification: "parked:unrefined" },
+        { id: "a-2", title: "what the product is called", status: "open", classification: "yours:decision" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(inbox(snap).map((e) => e.issue.id), ["a-2"]);
+});
+
+test("the emitted JSON Schema carries parked:unrefined", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const issue = schema["properties"].projects.items.properties.issues.items;
+
+  assert.equal(issue.properties.classification.enum.includes("parked:unrefined"), true);
+  assert.equal(issue.properties.classification.enum.includes("yours:decision"), true);
 });
