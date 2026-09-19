@@ -15,6 +15,8 @@ import {
   PullRequest,
   Candidate,
   Signal,
+  Stopped,
+  StoppedBasis,
   resolveOrigin,
 } from "../src/index.ts";
 
@@ -632,4 +634,78 @@ test("the emitted JSON Schema carries parked:unrefined", () => {
 
   assert.equal(issue.properties.classification.enum.includes("parked:unrefined"), true);
   assert.equal(issue.properties.classification.enum.includes("yours:decision"), true);
+});
+
+test("an issue carries when its stop was first seen and how that instant was arrived at", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [
+        {
+          id: "a-1", title: "t", status: "open", classification: "yours:decision",
+          stopped: { since: "2026-09-10T12:00:00.000Z", basis: "carried" },
+        },
+        {
+          id: "a-2", title: "t", status: "open", classification: "parked:watch",
+          stopped: { since: "2026-09-19T08:00:00.000Z", basis: "first-seen" },
+        },
+      ],
+    }],
+  });
+
+  const [carried, firstSeen] = snap.projects[0]!.issues;
+  assert.deepEqual(carried!.stopped, { since: "2026-09-10T12:00:00.000Z", basis: "carried" });
+  assert.deepEqual(firstSeen!.stopped, { since: "2026-09-19T08:00:00.000Z", basis: "first-seen" });
+  assert.ok(Date.parse(carried!.stopped!.since) < Date.parse(firstSeen!.stopped!.since));
+});
+
+test("an issue whose stop was not tracked stays absent rather than standing in as a value", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      issues: [{ id: "a-1", title: "t", status: "open", classification: "parked:watch" }],
+    }],
+  });
+
+  const issue = snap.projects[0]!.issues[0]!;
+  assert.equal(issue.stopped, undefined);
+  assert.equal(Object.hasOwn(issue, "stopped"), false);
+  assert.equal(issue.classification, "parked:watch");
+});
+
+test("a stop names both its instant and its basis, or it is not a stop", () => {
+  const base = { id: "a-1", title: "t", status: "open", classification: "parked:watch" };
+  const since = "2026-09-10T12:00:00.000Z";
+
+  assert.throws(() => Issue.parse({ ...base, stopped: {} }));
+  assert.throws(() => Issue.parse({ ...base, stopped: { since } }));
+  assert.throws(() => Issue.parse({ ...base, stopped: { basis: "carried" } }));
+  assert.throws(() => Issue.parse({ ...base, stopped: { since: "yesterday", basis: "carried" } }));
+  assert.throws(() => Issue.parse({ ...base, stopped: { since: 1757505600000, basis: "carried" } }));
+  assert.throws(() => Issue.parse({ ...base, stopped: { since, basis: "guessed" } }));
+  assert.throws(() => Issue.parse({ ...base, stopped: since }));
+});
+
+test("the basis is one of exactly two values", () => {
+  assert.deepEqual(StoppedBasis.options, ["carried", "first-seen"]);
+  assert.equal(Stopped.parse({ since: "2026-09-10T12:00:00.000Z", basis: "first-seen" }).basis, "first-seen");
+});
+
+test("the emitted JSON Schema carries stopped with a date-time and the two-value basis, and does not require it", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const issue = schema["properties"].projects.items.properties.issues.items;
+  const stopped = issue.properties.stopped;
+
+  assert.equal(stopped.type, "object");
+  assert.equal(issue.required.includes("stopped"), false);
+  assert.equal("default" in stopped, false);
+  assert.equal(stopped.properties.since.type, "string");
+  assert.equal(stopped.properties.since.format, schema["properties"].generatedAt.format);
+  assert.deepEqual(stopped.properties.basis.enum, ["carried", "first-seen"]);
+  assert.deepEqual([...stopped.required].sort(), ["basis", "since"]);
+  assert.match(stopped.description, /Absent means the producer did not track/);
 });

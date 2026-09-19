@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.11.0";
+export const SCHEMA_VERSION = "1.12.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -168,6 +168,23 @@ export const Origin = z.object({
 });
 export type Origin = z.infer<typeof Origin>;
 
+export const StoppedBasis = z.enum(["carried", "first-seen"]);
+export type StoppedBasis = z.infer<typeof StoppedBasis>;
+
+export const Stopped = z
+  .object({
+    since: Iso.describe(
+      "When the producer first saw this issue stopped for its current reason. A tracker records why an issue stopped and not when, so this is the earliest the producer can vouch for - a lower bound on the park's age, never the moment the tracker parked it.",
+    ),
+    basis: StoppedBasis.describe(
+      "How `since` was arrived at. `carried` means it was kept from an earlier collection that saw the same issue stopped for the same reason, so the age spans more than one run; `first-seen` means this collection is the first to see it, so `since` is this run's own time. A change of reason starts the age over.",
+    ),
+  })
+  .describe(
+    "When an issue's current stop was first observed. Absent means the producer did not track how long the issue has been stopped, and says nothing about whether it is stopped - `classification` says that.",
+  );
+export type Stopped = z.infer<typeof Stopped>;
+
 export const Issue = z.object({
   id: z.string(),
   title: z.string(),
@@ -193,6 +210,7 @@ export const Issue = z.object({
     .describe(
       "The session name that asked for this issue, as the tracker records its creator. Distinct from `origin`, which is what the creator wrote down about itself and carries the `ref` that a notice is actually delivered to; this is the tracker's own record and is a label only, so nothing routes on it. Absent means the producer did not report one.",
     ),
+  stopped: Stopped.optional(),
 });
 export type Issue = z.infer<typeof Issue>;
 
