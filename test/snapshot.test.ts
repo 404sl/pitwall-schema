@@ -17,6 +17,8 @@ import {
   Signal,
   Stopped,
   StoppedBasis,
+  CollectionError,
+  CollectionScope,
   resolveOrigin,
 } from "../src/index.ts";
 
@@ -708,4 +710,67 @@ test("the emitted JSON Schema carries stopped with a date-time and the two-value
   assert.deepEqual(stopped.properties.basis.enum, ["carried", "first-seen"]);
   assert.deepEqual([...stopped.required].sort(), ["basis", "since"]);
   assert.match(stopped.description, /Absent means the producer did not track/);
+});
+
+test("a collection error carries how much of its source was not read, under either scope", () => {
+  const at = new Date().toISOString();
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      errors: [
+        { source: "beads", message: "bd exited 1", at, scope: "source" },
+        { source: "repo:cli", message: "default branch could not be read", at, scope: "field" },
+      ],
+    }],
+    errors: [{ source: "config", message: "roots is not an array of strings", at, scope: "source" }],
+  });
+
+  const [whole, partial] = snap.projects[0]!.errors;
+  assert.equal(whole!.scope, "source");
+  assert.equal(partial!.scope, "field");
+  assert.equal(snap.errors[0]!.scope, "source");
+});
+
+test("a collection error without a scope still parses and claims none", () => {
+  const snap = parseSnapshot({
+    ...minimal,
+    projects: [{
+      id: "a", name: "a", root: "/tmp/a",
+      authority: { kind: "beads" }, metrics: {},
+      errors: [{ source: "beads", message: "bd exited 1", at: new Date().toISOString() }],
+    }],
+  });
+
+  const error = snap.projects[0]!.errors[0]!;
+  assert.equal(error.scope, undefined);
+  assert.equal(Object.hasOwn(error, "scope"), false);
+});
+
+test("a scope is one of exactly two values, not whatever a collector happened to put there", () => {
+  const base = { source: "beads", message: "bd exited 1", at: "2026-09-20T06:00:00.000Z" };
+
+  assert.deepEqual(CollectionScope.options, ["source", "field"]);
+  assert.throws(() => CollectionError.parse({ ...base, scope: "partial" }));
+  assert.throws(() => CollectionError.parse({ ...base, scope: "severity" }));
+  assert.throws(() => CollectionError.parse({ ...base, scope: "" }));
+  assert.throws(() => CollectionError.parse({ ...base, scope: 1 }));
+  assert.throws(() => CollectionError.parse({ ...base, scope: null }));
+});
+
+test("the emitted JSON Schema carries scope on both error lists with the two values, and neither requires nor defaults it", () => {
+  const schema = z.toJSONSchema(Snapshot, { io: "output" }) as Record<string, any>;
+  const projectError = schema["properties"].projects.items.properties.errors.items;
+  const runError = schema["properties"].errors.items;
+
+  for (const error of [projectError, runError]) {
+    const scope = error.properties.scope;
+    assert.deepEqual(scope.enum, ["source", "field"]);
+    assert.equal(error.required.includes("scope"), false);
+    assert.equal("default" in scope, false);
+    assert.match(scope.description, /only field-scope errors is COMPLETE/);
+    assert.match(scope.description, /any source-scope error is not/);
+    assert.match(scope.description, /Absent means the producer did not say/);
+  }
 });
