@@ -7,7 +7,7 @@ import { z } from "zod";
  * meaning. Consumers are expected to keep working across a MINOR bump, so an
  * agent at 1.3 may post to a console that only knows 1.0.
  */
-export const SCHEMA_VERSION = "1.12.0";
+export const SCHEMA_VERSION = "1.13.0";
 
 const Iso = z.string().datetime({ offset: true });
 
@@ -258,10 +258,16 @@ export type Metrics = z.infer<typeof Metrics>;
  * genuinely empty backlog and is the most dangerous thing this document could
  * say. A console must be able to tell "nothing to do" from "we could not look".
  */
+export const CollectionScope = z.enum(["source", "field"]);
+export type CollectionScope = z.infer<typeof CollectionScope>;
+
 export const CollectionError = z.object({
   source: z.string(),
   message: z.string(),
   at: Iso,
+  scope: CollectionScope.optional().describe(
+    "How much of `source` was not read. `source` means the whole source could not be read at all - its collection is empty and the project is incomplete. `field` means one field of that source was not read and everything else was, so the project is complete with a gap that `message` names. The consumer rule, stated here so no console re-derives it: a project with only field-scope errors is COMPLETE and is not marked otherwise; one with any source-scope error is not. Absent means the producer did not say, and a consumer reads it as `source`, because that is what every error meant before this field existed.",
+  ),
 });
 export type CollectionError = z.infer<typeof CollectionError>;
 
